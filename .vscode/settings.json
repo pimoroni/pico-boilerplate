@@ -1,0 +1,5 @@
+{
+    "cmake.configureSettings": {
+        // "PICO_SDK_PATH": "../../pico-sdk" // <-- Set this if you've not set ${env:PICO_SDK_PATH}
+    }
+}
