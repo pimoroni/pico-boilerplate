@@ -16,6 +16,15 @@ It's easier if you make a `pico` directory or similar in which you keep the SDK,
 
 ## Preparing your build environment
 
+Install build requirements:
+
+```bash
+sudo apt update
+sudo apt install cmake gcc-arm-none-eabi build-essential
+```
+
+And the Pico SDK:
+
 ```
 git clone https://github.com/raspberrypi/pico-sdk
 cd pico-sdk
