@@ -29,3 +29,6 @@ include(../pimoroni-pico/libraries/pico_explorer/pico_explorer.cmake)
 target_link_libraries(pico-boilerplate
     pico_explorer # <-- List libraries here!
 )
+
+# create map/bin/hex file etc.
+pico_add_extra_outputs(pico-boilerplate)
