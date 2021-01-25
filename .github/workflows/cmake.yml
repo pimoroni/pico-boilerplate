@@ -50,14 +50,6 @@ jobs:
         path: pico-sdk
         submodules: true
 
-    # Link the Pico SDK via pico_sdk_import.cmake
-    - name: Link the Pico SDK to our proejct
-      shell: bash
-      working-directory: ${{github.workspace}}/project
-      run: |
-        rm -f pico_sdk_import.cmake
-        ln -s ../pico-sdk/external/pico_sdk_import.cmake pico_sdk_import.cmake
-
     # Linux deps
     - name: Install deps
       if: runner.os == 'Linux'

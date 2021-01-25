@@ -54,12 +54,6 @@ git clone https://github.com/pimoroni/pico-boilerplate
 cd pico-boilerplate
 ```
 
-And then (assuming pico-sdk is alongside your project):
-
-```
-ln -s ../pico-sdk/external/pico_sdk_import.cmake .
-```
-
 If you have not or don't want to set `PICO_SDK_PATH` you can edit `.vscode/settings.json` to pass the path directly to CMake.
 
 ## Prepare Visual Studio Code

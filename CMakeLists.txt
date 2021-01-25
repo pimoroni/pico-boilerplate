@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.12)
 # Change your executable name to something creative!
 set(NAME pico-boilerplate) # <-- Name your project/executable here!
 
-# Make sure you symlink this file into the project directory
-# eg: ln -s ../pico-sdk/external/pico_sdk_import.cmake .
 include(pico_sdk_import.cmake)
 
 # Gooey boilerplate
