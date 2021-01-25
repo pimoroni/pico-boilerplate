@@ -16,7 +16,7 @@ int main() {
     pico_explorer.set_pen(255, 0, 0);
 
     while(true) {
-        pico_explorer.pixel(point(0, 0));
+        pico_explorer.pixel(Point(0, 0));
         // now we've done our drawing let's update the screen
         pico_explorer.update();
     }
