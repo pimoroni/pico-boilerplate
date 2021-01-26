@@ -11,7 +11,7 @@
             "request": "launch",
             "type": "cortex-debug",
             "servertype": "openocd",
-            "gdbpath": "/usr/bin/gdb-multiarch",
+            "gdbPath": "/usr/bin/gdb-multiarch",
             "device": "RP2040",
             "configFiles": [
                 "interface/picoprobe.cfg",
