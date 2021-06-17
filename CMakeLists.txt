@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.12)
 # Change your executable name to something creative!
 set(NAME pico-boilerplate) # <-- Name your project/executable here!
 
+include(pimoroni_pico_import.cmake)
 include(pico_sdk_import.cmake)
 
 # Gooey boilerplate
@@ -20,8 +21,8 @@ add_executable(${NAME}
 
 # Include required libraries
 # This assumes `pimoroni-pico` is stored alongside your project
-include(../pimoroni-pico/libraries/pico_explorer/pico_explorer.cmake)
-# include(../pimoroni-pico/libraries/pico_display/pico_display.cmake)
+include(libraries/pico_explorer/pico_explorer)
+# include(libraries/pico_display/pico_display)
 
 # Don't forget to link the libraries you need!
 target_link_libraries(${NAME}
