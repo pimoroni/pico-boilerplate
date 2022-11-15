@@ -16,12 +16,12 @@ pico_sdk_init()
 
 # Add your source files
 add_executable(${NAME}
-    main.cpp # <-- Add source files here!
+    main.cpp
 )
 
 # Include required libraries
 # This assumes `pimoroni-pico` is stored alongside your project
-include(common/pimoroni_i2c)
+#include(common/pimoroni_i2c)
 include(libraries/motor2040/motor2040)
 include(drivers/pid/pid)
 include(drivers/button/button)
@@ -31,13 +31,15 @@ include(drivers/pwm/pwm_cluster)
 include(drivers/pwm/pwm)
 include(drivers/plasma/plasma)
 include(drivers/encoder/encoder)
+include(drivers/analog/analog)
 # include(libraries/pico_display/pico_display)
 
 # Don't forget to link the libraries you need!
 target_link_libraries(${NAME}
-    pimoroni_i2c
+    #pimoroni_i2c
     motor2040
     button
+    analog
     pid 
     plasma
     pwm_cluster
@@ -45,6 +47,9 @@ target_link_libraries(${NAME}
     motor_cluster
     motor# <-- List libraries here!
 )
+
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
 
 # create map/bin/hex file etc.
 pico_add_extra_outputs(${NAME})

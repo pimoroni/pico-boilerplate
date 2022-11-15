@@ -1,28 +1,87 @@
-#include <cstdio>
+#include <stdio.h>
 #include "pico/stdlib.h"
 
 #include "motor2040.hpp"
 #include "button.hpp"
 #include "pid.hpp"
+#include "analog.hpp"
 
 /*
-An example of how to move a motor smoothly between random positions,
-with the help of it's attached encoder and PID control.
-
-Press "Boot" to exit the program.
+Loop-O firmware for the pimoroni motor2040 
+to provide control of the actuators and sensors over usb serial.
 */
 
 using namespace motor;
 using namespace encoder;
 
-// The pins of the motor being profiled
-const pin_pair MOTOR_PINS = motor2040::MOTOR_A;
+// Timer callback definitions
+bool update_callback(repeating_timer_t *rt);
+bool log_callback(repeating_timer_t *rt);
 
-// The pins of the encoder attached to the profiled motor
-const pin_pair ENCODER_PINS = motor2040::ENCODER_A;
+// Enum Definition
+enum ControlApproach
+{
+  NO_CONTROL = 0,
+  POSITION_CONTROL = 1,
+  VELOCITY_CONTROL = 2,
+};
+
+enum Actuators
+{
+  EXTENSION = 0,
+  TWIST_RIGHT = 1,
+  TWIST_LEFT = 2,
+  LOOP = 3
+};
+
+// Motor and sensor structs
+struct motor_state
+{
+  int control = NO_CONTROL;
+  int32_t count = 0;
+  int32_t delta = 0;
+  float setpoint = 0.0f;
+};
+
+struct sensors_state
+{
+  bool extension = 0;
+  bool twist = 0;
+  bool loop = 0;
+  bool cable0 = 0;
+  bool cable1 = 0;
+  bool cable2 = 0;
+  float force = 0.0f;
+} sensors;
+
+// Timer callback definitions
+bool update_callback(repeating_timer_t *rt);
+
+const int EXTENSION_LIMIT_PIN = 19;
+const int TWIST_LIMIT_PIN = 26;
+const int CABLE_RUNOUT0_PIN = 16;
+const int CABLE_RUNOUT1_PIN = 17;
+const int CABLE_RUNOUT2_PIN = 28;
+const int SINGLETACT_PIN = motor2040::ADC1;
+
+// Create an array of motor pointers
+const pin_pair motor_pins[] = {motor2040::MOTOR_A, motor2040::MOTOR_B,
+                               motor2040::MOTOR_C, motor2040::MOTOR_D};
+const uint NUM_MOTORS = count_of(motor_pins);
+Motor *motors[NUM_MOTORS];
+
+// Create an array of encoder pointers
+const pin_pair encoder_pins[] = {motor2040::ENCODER_A, motor2040::ENCODER_B,
+                                 motor2040::ENCODER_C, motor2040::ENCODER_D};
+const uint NUM_ENCODERS = count_of(encoder_pins);
+Encoder *encoders[NUM_ENCODERS];
+
+motor_state motor_states[NUM_MOTORS];
+
+const char *ENCODER_NAMES[] = {"Extension", "Twist Right", "Twist Left", "Loop"};
 
 // The gear ratio of the motor
-constexpr float GEAR_RATIO = 50.0f;
+constexpr float GEAR_RATIO = 98.0f;
 
 // The counts per revolution of the motor's output shaft
 constexpr float COUNTS_PER_REV = MMME_CPR * GEAR_RATIO;
@@ -35,7 +94,9 @@ constexpr float SPEED_SCALE = 5.4f;
 
 // How many times to update the motor per second
 const uint UPDATES = 100;
+const uint LOGS = 2;
 constexpr float UPDATE_RATE = 1.0f / (float)UPDATES;
+constexpr float LOG_RATE = 1.0f / (float)LOGS;
 
 // The time to travel between each random value
 constexpr float TIME_FOR_EACH_MOVE = 1.0f;
@@ -45,108 +106,83 @@ const uint UPDATES_PER_MOVE = TIME_FOR_EACH_MOVE * UPDATES;
 const uint PRINT_DIVIDER = 4;
 
 // Multipliers for the different printed values, so they appear nicely on the Thonny plotter
-constexpr float SPD_PRINT_SCALE = 20.0f;    // Driving Speed multipler
-
-// How far from zero to move the motor, in degrees
-constexpr float POSITION_EXTENT = 180.0f;
+constexpr float SPD_PRINT_SCALE = 20.0f; // Driving Speed multipler
 
 // The interpolating mode between setpoints. STEP (0), LINEAR (1), COSINE (2)
 const uint INTERP_MODE = 2;
 
-
 // PID values
-constexpr float POS_KP = 0.14f;   // Position proportional (P) gain
-constexpr float POS_KI = 0.0f;    // Position integral (I) gain
-constexpr float POS_KD = 0.002f;  // Position derivative (D) gain
-
-
-// Create a motor and set its direction and speed scale
-Motor m = Motor(MOTOR_PINS, DIRECTION, SPEED_SCALE);
-
-// Create an encoder and set its direction and counts per rev, using PIO 0 and State Machine 0
-Encoder enc = Encoder(pio0, 0, ENCODER_PINS, PIN_UNUSED, DIRECTION, COUNTS_PER_REV, true);
+constexpr float POS_KP = 0.14f;  // Position proportional (P) gain
+constexpr float POS_KI = 0.0f;   // Position integral (I) gain
+constexpr float POS_KD = 0.002f; // Position derivative (D) gain
 
 // Create the user button
+Button extension_limit(EXTENSION_LIMIT_PIN);
+Button twist_limit(TWIST_LIMIT_PIN);
+Button cable_runout0(CABLE_RUNOUT0_PIN);
+Button cable_runout1(CABLE_RUNOUT1_PIN);
+Button cable_runout2(CABLE_RUNOUT2_PIN);
 Button user_sw(motor2040::USER_SW);
+
+Analog singletact = Analog(SINGLETACT_PIN);
 
 // Create PID object for position control
 PID pos_pid = PID(POS_KP, POS_KI, POS_KD, UPDATE_RATE);
 
-
-int main() {
+int main()
+{
   stdio_init_all();
 
-  // Initialise the motor and encoder
-  m.init();
-  enc.init();
+  for (auto i = 0u; i < NUM_MOTORS; i++)
+  {
+    motors[i] = new Motor(motor_pins[i], NORMAL_DIR, SPEED_SCALE);
+    motors[i]->init();
 
-  // Enable the motor
-  m.enable();
-
-
-  uint update = 0;
-  uint print_count = 0;
-
-  // Set the initial value and create a random end value between the extents
-  float start_value = 0.0f;
-  float end_value = (((float)rand() / (float)RAND_MAX) * (POSITION_EXTENT * 2.0f)) - POSITION_EXTENT;
-
-  // Continually move the motor until the user button is pressed
-  while(!user_sw.raw()) {
-
-    // Capture the state of the encoder
-    Encoder::Capture capture = enc.capture();
-
-    // Calculate how far along this movement to be
-    float percent_along = (float)update / (float)UPDATES_PER_MOVE;
-
-    switch(INTERP_MODE) {
-    case 0:
-      // Move the motor instantly to the end value
-      pos_pid.setpoint = end_value;
-      break;
-
-    case 2:
-      // Move the motor between values using cosine
-      pos_pid.setpoint = (((-cosf(percent_along * (float)M_PI) + 1.0) / 2.0) * (end_value - start_value)) + start_value;
-      break;
-
-    case 1:
-    default:
-      // Move the motor linearly between values
-      pos_pid.setpoint = (percent_along * (end_value - start_value)) + start_value;
-    }
-
-    // Calculate the velocity to move the motor closer to the position setpoint
-    float vel = pos_pid.calculate(capture.degrees(), capture.degrees_per_second());
-
-    // Set the new motor driving speed
-    m.speed(vel);
-
-    // Print out the current motor values and their setpoints, but only on every multiple
-    if(print_count == 0) {
-      printf("Pos = %f, ", capture.degrees());
-      printf("Pos SP = %f, ", pos_pid.setpoint);
-      printf("Speed = %f\n", m.speed() * SPD_PRINT_SCALE);
-    }
-
-    // Increment the print count, and wrap it
-    print_count = (print_count + 1) % PRINT_DIVIDER;
-
-    update++;   // Move along in time
-
-    // Have we reached the end of this movement?
-    if(update >= UPDATES_PER_MOVE) {
-      update = 0;  // Reset the counter
-
-      // Set the start as the last end and create a new random end value
-      start_value = end_value;
-      end_value = (((float)rand() / (float)RAND_MAX) * (POSITION_EXTENT * 2.0f)) - POSITION_EXTENT;
-    }
-
-    sleep_ms(UPDATE_RATE * 1000.0f);
+    encoders[i] = new Encoder(pio0, i, encoder_pins[i], PIN_UNUSED, NORMAL_DIR, COUNTS_PER_REV, true);
+    encoders[i]->init();
   }
 
-  // Disable the motor
-  m.disable();
+  repeating_timer_t update_timer;
+  repeating_timer_t log_timer;
+
+  add_repeating_timer_ms(UPDATE_RATE * 1000.0f, update_callback, NULL, &update_timer);
+  add_repeating_timer_ms(LOG_RATE * 1000.0f, log_callback, NULL, &log_timer);
+
+  while (!user_sw.raw())
+  {
+    /*printf("%d,%d,%d,%d,%d,%f\n", extension_limit.raw(), twist_limit.raw(), cable_runout0.raw(), cable_runout1.raw(), cable_runout2.raw(), singletact.read_voltage());
+    sleep_ms(UPDATE_RATE * 1000.0f);*/
+  }
+  cancel_repeating_timer(&update_timer);
+  cancel_repeating_timer(&log_timer);
+}
+
+bool update_callback(repeating_timer_t *rt)
+{
+  sensors.extension = extension_limit.raw();
+  sensors.twist = twist_limit.raw();
+  sensors.cable0 = cable_runout0.raw();
+  sensors.cable1 = cable_runout1.raw();
+  sensors.cable2 = cable_runout2.raw();
+  sensors.force = singletact.read_voltage();
+
+  for (auto e = 0u; e < NUM_ENCODERS; e++)
+  {
+    motor_states[e].count = encoders[e]->count();
+    motor_states[e].delta = encoders[e]->delta();
+  }
+
+  return true;
+}
+
+bool log_callback(repeating_timer_t *rt)
+{
+  printf("%d, %d, %d, %d, %d, %f", sensors.extension, sensors.twist, sensors.cable0, sensors.cable1, sensors.cable2, sensors.force);
+
+  for (auto e = 0u; e < NUM_ENCODERS; e++)
+  {
+    printf(", %d", motor_states[e].count);
+  }
+  printf("\n");
+  return true;
 }
