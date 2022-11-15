@@ -18,6 +18,8 @@ using namespace encoder;
 bool update_callback(repeating_timer_t *rt);
 bool log_callback(repeating_timer_t *rt);
 
+uint16_t read_line(uint8_t *buffer);
+
 // Enum Definition
 enum ControlApproach
 {
@@ -98,19 +100,6 @@ const uint LOGS = 2;
 constexpr float UPDATE_RATE = 1.0f / (float)UPDATES;
 constexpr float LOG_RATE = 1.0f / (float)LOGS;
 
-// The time to travel between each random value
-constexpr float TIME_FOR_EACH_MOVE = 1.0f;
-const uint UPDATES_PER_MOVE = TIME_FOR_EACH_MOVE * UPDATES;
-
-// How many of the updates should be printed (i.e. 2 would be every other update)
-const uint PRINT_DIVIDER = 4;
-
-// Multipliers for the different printed values, so they appear nicely on the Thonny plotter
-constexpr float SPD_PRINT_SCALE = 20.0f; // Driving Speed multipler
-
-// The interpolating mode between setpoints. STEP (0), LINEAR (1), COSINE (2)
-const uint INTERP_MODE = 2;
-
 // PID values
 constexpr float POS_KP = 0.14f;  // Position proportional (P) gain
 constexpr float POS_KI = 0.0f;   // Position integral (I) gain
@@ -128,6 +117,10 @@ Analog singletact = Analog(SINGLETACT_PIN);
 
 // Create PID object for position control
 PID pos_pid = PID(POS_KP, POS_KI, POS_KD, UPDATE_RATE);
+
+const int BUFFER_LENGTH = 256;
+
+uint8_t serial_buffer[BUFFER_LENGTH];
 
 int main()
 {
@@ -150,8 +143,13 @@ int main()
 
   while (!user_sw.raw())
   {
-    /*printf("%d,%d,%d,%d,%d,%f\n", extension_limit.raw(), twist_limit.raw(), cable_runout0.raw(), cable_runout1.raw(), cable_runout2.raw(), singletact.read_voltage());
-    sleep_ms(UPDATE_RATE * 1000.0f);*/
+    uint16_t end = read_line(serial_buffer);
+    if (end > 0)
+    {
+      printf("%s\n", serial_buffer);
+    }
+    busy_wait_ms(100);
+
   }
   cancel_repeating_timer(&update_timer);
   cancel_repeating_timer(&log_timer);
@@ -185,4 +183,21 @@ bool log_callback(repeating_timer_t *rt)
   }
   printf("\n");
   return true;
+}
+
+uint16_t read_line(uint8_t *buffer) {
+  uint16_t buffer_index= 0;
+  while (true) {
+    int c = getchar_timeout_us(100);
+    if (c != PICO_ERROR_TIMEOUT && buffer_index < BUFFER_LENGTH) {
+      buffer[buffer_index++] = c;
+      if (buffer[buffer_index] == '\n')
+      {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+  return buffer_index;
 }
