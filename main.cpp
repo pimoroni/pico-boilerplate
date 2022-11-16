@@ -14,12 +14,6 @@ to provide control of the actuators and sensors over usb serial.
 using namespace motor;
 using namespace encoder;
 
-// Timer callback definitions
-bool update_callback(repeating_timer_t *rt);
-bool log_callback(repeating_timer_t *rt);
-
-uint16_t read_line(uint8_t *buffer);
-
 // Enum Definition
 enum ControlApproach
 {
@@ -42,7 +36,10 @@ struct motor_state
   int control = NO_CONTROL;
   int32_t count = 0;
   int32_t delta = 0;
-  float setpoint = 0.0f;
+  float speed_setpoint = 0.0f;
+  float position_setpoint = 0.0f;
+  float velocity_setpoint = 0.0f;
+  float drive_speed = 0.0f;
 };
 
 struct sensors_state
@@ -56,8 +53,19 @@ struct sensors_state
   float force = 0.0f;
 } sensors;
 
+struct actuator_command 
+{
+  uint8_t id = 0;
+  uint16_t command = 0;
+  float value = 0.0f;
+};
+
 // Timer callback definitions
 bool update_callback(repeating_timer_t *rt);
+bool log_callback(repeating_timer_t *rt);
+
+uint16_t read_line(uint8_t *buffer);
+actuator_command interpret_buffer(uint8_t *buffer, uint16_t end_index);
 
 const int EXTENSION_LIMIT_PIN = 19;
 const int TWIST_LIMIT_PIN = 26;
@@ -105,6 +113,10 @@ constexpr float POS_KP = 0.14f;  // Position proportional (P) gain
 constexpr float POS_KI = 0.0f;   // Position integral (I) gain
 constexpr float POS_KD = 0.002f; // Position derivative (D) gain
 
+constexpr float VEL_KP = 30.0f;   // Velocity proportional (P) gain
+constexpr float VEL_KI = 0.0f;    // Velocity integral (I) gain
+constexpr float VEL_KD = 0.4f;    // Velocity derivative (D) gain
+
 // Create the user button
 Button extension_limit(EXTENSION_LIMIT_PIN);
 Button twist_limit(TWIST_LIMIT_PIN);
@@ -115,8 +127,9 @@ Button user_sw(motor2040::USER_SW);
 
 Analog singletact = Analog(SINGLETACT_PIN);
 
-// Create PID object for position control
+// Create PID object for position and velocity control
 PID pos_pid = PID(POS_KP, POS_KI, POS_KD, UPDATE_RATE);
+PID vel_pid = PID(VEL_KP, VEL_KI, VEL_KD, UPDATE_RATE);
 
 const int BUFFER_LENGTH = 256;
 
@@ -146,7 +159,9 @@ int main()
     uint16_t end = read_line(serial_buffer);
     if (end > 0)
     {
-      printf("%s\n", serial_buffer);
+      actuator_command message = interpret_buffer(serial_buffer, end);
+      //printf("%s\n", serial_buffer);
+      printf("id: %d - command: %d - value: %f\n", message.id, message.command, message.value);
     }
     busy_wait_ms(100);
 
@@ -170,6 +185,21 @@ bool update_callback(repeating_timer_t *rt)
     motor_states[e].delta = encoders[e]->delta();
   }
 
+  for (auto e = 0u; e < NUM_MOTORS; e++) 
+  { 
+    switch (motor_states[e].control){
+      case NO_CONTROL:
+        motor_states[e].drive_speed = motor_states[e].speed_setpoint;
+      case POSITION_CONTROL:
+        pos_pid.setpoint = motor_states[e].position_setpoint;
+        motor_states[e].drive_speed = pos_pid.calculate(motor_states[e].count);
+      case VELOCITY_CONTROL:
+        vel_pid.setpoint = motor_states[e].velocity_setpoint;
+        float acceleration = pos_pid.calculate(motor_states[e].delta);
+        motor_states[e].drive_speed += acceleration;
+    }
+  motors[e]->speed(motor_states[e].drive_speed);
+  }
   return true;
 }
 
@@ -185,11 +215,13 @@ bool log_callback(repeating_timer_t *rt)
   return true;
 }
 
-uint16_t read_line(uint8_t *buffer) {
+uint16_t read_line(uint8_t *buffer) 
+{
   uint16_t buffer_index= 0;
   while (true) {
     int c = getchar_timeout_us(100);
-    if (c != PICO_ERROR_TIMEOUT && buffer_index < BUFFER_LENGTH) {
+    if (c != PICO_ERROR_TIMEOUT && buffer_index < BUFFER_LENGTH) 
+    {
       buffer[buffer_index++] = c;
       if (buffer[buffer_index] == '\n')
       {
@@ -200,4 +232,22 @@ uint16_t read_line(uint8_t *buffer) {
     }
   }
   return buffer_index;
+}
+
+actuator_command interpret_buffer(uint8_t *buffer, uint16_t end_index)
+{
+  uint16_t value_length = end_index - 2;
+  actuator_command message;
+  char id = buffer[0];
+  char command[2] = {buffer[1], buffer[2]};
+  char value[value_length];
+  for (uint16_t i = 0; i < value_length; i++)
+  {
+    value[i] = buffer[i+3];
+  }
+  uint8_t value_buffer[end_index-2];
+  message.id = id - '0';
+  message.command = atoi(command);
+  message.value = atof(value);
+  return message;
 }
