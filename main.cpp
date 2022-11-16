@@ -7,7 +7,7 @@
 #include "analog.hpp"
 
 /*
-Loop-O firmware for the pimoroni motor2040 
+Loop-O firmware for the pimoroni motor2040
 to provide control of the actuators and sensors over usb serial.
 */
 
@@ -30,9 +30,20 @@ enum Actuators
   LOOP = 3
 };
 
+enum Commands
+{
+  TORQUE_ENABLE = 0,
+  CONTROL_APPROACH = 1,
+  GOAL_SPEED = 2,
+  GOAL_POSITION = 3,
+  GOAL_VELOCITY = 4,
+  ZERO_ENCODER = 5,
+};
+
 // Motor and sensor structs
 struct motor_state
 {
+  int torque = 0;
   int control = NO_CONTROL;
   int32_t count = 0;
   int32_t delta = 0;
@@ -53,7 +64,7 @@ struct sensors_state
   float force = 0.0f;
 } sensors;
 
-struct actuator_command 
+struct actuator_command
 {
   uint8_t id = 0;
   uint16_t command = 0;
@@ -113,9 +124,9 @@ constexpr float POS_KP = 0.14f;  // Position proportional (P) gain
 constexpr float POS_KI = 0.0f;   // Position integral (I) gain
 constexpr float POS_KD = 0.002f; // Position derivative (D) gain
 
-constexpr float VEL_KP = 30.0f;   // Velocity proportional (P) gain
-constexpr float VEL_KI = 0.0f;    // Velocity integral (I) gain
-constexpr float VEL_KD = 0.4f;    // Velocity derivative (D) gain
+constexpr float VEL_KP = 30.0f; // Velocity proportional (P) gain
+constexpr float VEL_KI = 0.0f;  // Velocity integral (I) gain
+constexpr float VEL_KD = 0.4f;  // Velocity derivative (D) gain
 
 // Create the user button
 Button extension_limit(EXTENSION_LIMIT_PIN);
@@ -160,11 +171,30 @@ int main()
     if (end > 0)
     {
       actuator_command message = interpret_buffer(serial_buffer, end);
-      //printf("%s\n", serial_buffer);
+      // printf("%s\n", serial_buffer);
       printf("id: %d - command: %d - value: %f\n", message.id, message.command, message.value);
+      switch (message.command)
+      {
+      case TORQUE_ENABLE:
+        motor_states[message.id].torque = (int)message.value;
+        break;
+      case CONTROL_APPROACH:
+        motor_states[message.id].control = (int)message.value;
+        break;
+      case GOAL_SPEED:
+        motor_states[message.id].speed_setpoint = message.value;
+        break;
+      case GOAL_POSITION:
+        motor_states[message.id].position_setpoint = message.value;
+        break;
+      case GOAL_VELOCITY:
+        motor_states[message.id].velocity_setpoint = message.value;
+        break;
+      case ZERO_ENCODER:
+        encoders[message.id]->zero();
+        break;
+      }
     }
-    busy_wait_ms(100);
-
   }
   cancel_repeating_timer(&update_timer);
   cancel_repeating_timer(&log_timer);
@@ -185,20 +215,38 @@ bool update_callback(repeating_timer_t *rt)
     motor_states[e].delta = encoders[e]->delta();
   }
 
-  for (auto e = 0u; e < NUM_MOTORS; e++) 
-  { 
-    switch (motor_states[e].control){
+  for (auto e = 0u; e < NUM_MOTORS; e++)
+  {
+    if (motor_states[e].torque)
+    {
+      if (!motors[e]->is_enabled())
+      {
+        motors[e]->enable();
+      }
+      switch (motor_states[e].control)
+      {
       case NO_CONTROL:
         motor_states[e].drive_speed = motor_states[e].speed_setpoint;
+        break;
       case POSITION_CONTROL:
         pos_pid.setpoint = motor_states[e].position_setpoint;
         motor_states[e].drive_speed = pos_pid.calculate(motor_states[e].count);
+        break;
       case VELOCITY_CONTROL:
         vel_pid.setpoint = motor_states[e].velocity_setpoint;
         float acceleration = pos_pid.calculate(motor_states[e].delta);
         motor_states[e].drive_speed += acceleration;
+        break;
+      }
+      motors[e]->speed(motor_states[e].drive_speed);
     }
-  motors[e]->speed(motor_states[e].drive_speed);
+    else
+    {
+      if (motors[e]->is_enabled())
+      {
+        motors[e]->disable();
+      }
+    }
   }
   return true;
 }
@@ -206,7 +254,6 @@ bool update_callback(repeating_timer_t *rt)
 bool log_callback(repeating_timer_t *rt)
 {
   printf("%d, %d, %d, %d, %d, %f", sensors.extension, sensors.twist, sensors.cable0, sensors.cable1, sensors.cable2, sensors.force);
-
   for (auto e = 0u; e < NUM_ENCODERS; e++)
   {
     printf(", %d", motor_states[e].count);
@@ -215,19 +262,22 @@ bool log_callback(repeating_timer_t *rt)
   return true;
 }
 
-uint16_t read_line(uint8_t *buffer) 
+uint16_t read_line(uint8_t *buffer)
 {
-  uint16_t buffer_index= 0;
-  while (true) {
+  uint16_t buffer_index = 0;
+  while (true)
+  {
     int c = getchar_timeout_us(100);
-    if (c != PICO_ERROR_TIMEOUT && buffer_index < BUFFER_LENGTH) 
+    if (c != PICO_ERROR_TIMEOUT && buffer_index < BUFFER_LENGTH)
     {
       buffer[buffer_index++] = c;
       if (buffer[buffer_index] == '\n')
       {
         break;
       }
-    } else {
+    }
+    else
+    {
       break;
     }
   }
@@ -236,18 +286,17 @@ uint16_t read_line(uint8_t *buffer)
 
 actuator_command interpret_buffer(uint8_t *buffer, uint16_t end_index)
 {
-  uint16_t value_length = end_index - 2;
+  uint16_t value_length = end_index - 1;
   actuator_command message;
   char id = buffer[0];
-  char command[2] = {buffer[1], buffer[2]};
+  char command = buffer[1];
   char value[value_length];
   for (uint16_t i = 0; i < value_length; i++)
   {
-    value[i] = buffer[i+3];
+    value[i] = buffer[i + 2];
   }
-  uint8_t value_buffer[end_index-2];
   message.id = id - '0';
-  message.command = atoi(command);
+  message.command = command - '0';
   message.value = atof(value);
   return message;
 }
