@@ -74,9 +74,11 @@ struct actuator_command
 // Timer callback definitions
 bool update_callback(repeating_timer_t *rt);
 bool log_callback(repeating_timer_t *rt);
+bool command_callback(repeating_timer_t *rt);
 
 uint16_t read_line(uint8_t *buffer);
 actuator_command interpret_buffer(uint8_t *buffer, uint16_t end_index);
+void execute_command();
 
 const int EXTENSION_LIMIT_PIN = 19;
 const int TWIST_LIMIT_PIN = 26;
@@ -116,8 +118,10 @@ constexpr float SPEED_SCALE = 5.4f;
 // How many times to update the motor per second
 const uint UPDATES = 100;
 const uint LOGS = 2;
+const uint COMMANDS = 20;
 constexpr float UPDATE_RATE = 1.0f / (float)UPDATES;
 constexpr float LOG_RATE = 1.0f / (float)LOGS;
+constexpr float COMMAND_RATE = 1.0f / (float)COMMANDS;
 
 // PID values
 constexpr float POS_KP = 0.14f;  // Position proportional (P) gain
@@ -142,7 +146,7 @@ Analog singletact = Analog(SINGLETACT_PIN);
 PID pos_pid = PID(POS_KP, POS_KI, POS_KD, UPDATE_RATE);
 PID vel_pid = PID(VEL_KP, VEL_KI, VEL_KD, UPDATE_RATE);
 
-const int BUFFER_LENGTH = 256;
+const int BUFFER_LENGTH = 512;
 
 uint8_t serial_buffer[BUFFER_LENGTH];
 
@@ -155,49 +159,28 @@ int main()
     motors[i] = new Motor(motor_pins[i], NORMAL_DIR, SPEED_SCALE);
     motors[i]->init();
 
-    encoders[i] = new Encoder(pio0, i, encoder_pins[i], PIN_UNUSED, NORMAL_DIR, COUNTS_PER_REV, true);
+    encoders[i] = new Encoder(pio0, i, encoder_pins[i], PIN_UNUSED, REVERSED_DIR, COUNTS_PER_REV, true);
     encoders[i]->init();
   }
 
   repeating_timer_t update_timer;
   repeating_timer_t log_timer;
+  repeating_timer_t command_timer;
 
   add_repeating_timer_ms(UPDATE_RATE * 1000.0f, update_callback, NULL, &update_timer);
   add_repeating_timer_ms(LOG_RATE * 1000.0f, log_callback, NULL, &log_timer);
+  add_repeating_timer_ms(LOG_RATE * 1000.0f, command_callback, NULL, &command_timer);
 
-  while (!user_sw.raw())
-  {
-    uint16_t end = read_line(serial_buffer);
-    if (end > 0)
-    {
-      actuator_command message = interpret_buffer(serial_buffer, end);
-      // printf("%s\n", serial_buffer);
-      printf("id: %d - command: %d - value: %f\n", message.id, message.command, message.value);
-      switch (message.command)
-      {
-      case TORQUE_ENABLE:
-        motor_states[message.id].torque = (int)message.value;
-        break;
-      case CONTROL_APPROACH:
-        motor_states[message.id].control = (int)message.value;
-        break;
-      case GOAL_SPEED:
-        motor_states[message.id].speed_setpoint = message.value;
-        break;
-      case GOAL_POSITION:
-        motor_states[message.id].position_setpoint = message.value;
-        break;
-      case GOAL_VELOCITY:
-        motor_states[message.id].velocity_setpoint = message.value;
-        break;
-      case ZERO_ENCODER:
-        encoders[message.id]->zero();
-        break;
-      }
-    }
-  }
+  while (!user_sw.raw()){}
+
   cancel_repeating_timer(&update_timer);
   cancel_repeating_timer(&log_timer);
+  cancel_repeating_timer(&command_timer);
+
+  for (auto i = 0u; i < NUM_MOTORS; i++)
+  {
+    motors[i]->disable();
+  }
 }
 
 bool update_callback(repeating_timer_t *rt)
@@ -262,19 +245,50 @@ bool log_callback(repeating_timer_t *rt)
   return true;
 }
 
+
+bool command_callback(repeating_timer_t *rt)
+{
+  uint16_t end = read_line(serial_buffer);
+  if (end > 1)
+  {
+    actuator_command message = interpret_buffer(serial_buffer, end);
+    switch (message.command)
+      {
+      case TORQUE_ENABLE:
+        motor_states[message.id].torque = (int)message.value;
+        break;
+      case CONTROL_APPROACH:
+        motor_states[message.id].control = (int)message.value;
+        break;
+      case GOAL_SPEED:
+        motor_states[message.id].speed_setpoint = message.value;
+        break;
+      case GOAL_POSITION:
+        motor_states[message.id].position_setpoint = message.value;
+        break;
+      case GOAL_VELOCITY:
+        motor_states[message.id].velocity_setpoint = message.value;
+        break;
+      case ZERO_ENCODER:
+        encoders[message.id]->zero();
+        break;
+      }
+    end = 0;
+    printf("ACK\n");
+  }
+  end = 0;
+  return true;
+}
+
 uint16_t read_line(uint8_t *buffer)
 {
   uint16_t buffer_index = 0;
   while (true)
   {
-    int c = getchar_timeout_us(100);
+    int c = getchar_timeout_us(500);
     if (c != PICO_ERROR_TIMEOUT && buffer_index < BUFFER_LENGTH)
     {
       buffer[buffer_index++] = c;
-      if (buffer[buffer_index] == '\n')
-      {
-        break;
-      }
     }
     else
     {
@@ -286,7 +300,7 @@ uint16_t read_line(uint8_t *buffer)
 
 actuator_command interpret_buffer(uint8_t *buffer, uint16_t end_index)
 {
-  uint16_t value_length = end_index - 1;
+  uint16_t value_length = end_index-1;
   actuator_command message;
   char id = buffer[0];
   char command = buffer[1];
