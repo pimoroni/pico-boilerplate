@@ -117,8 +117,8 @@ constexpr float SPEED_SCALE = 5.4f;
 
 // How many times to update the motor per second
 const uint UPDATES = 100;
-const uint LOGS = 2;
-const uint COMMANDS = 20;
+const uint LOGS = 10;
+const uint COMMANDS = 100;
 constexpr float UPDATE_RATE = 1.0f / (float)UPDATES;
 constexpr float LOG_RATE = 1.0f / (float)LOGS;
 constexpr float COMMAND_RATE = 1.0f / (float)COMMANDS;
@@ -149,6 +149,8 @@ PID vel_pid = PID(VEL_KP, VEL_KI, VEL_KD, UPDATE_RATE);
 const int BUFFER_LENGTH = 512;
 
 uint8_t serial_buffer[BUFFER_LENGTH];
+
+bool acknowledge_flag = false;
 
 int main()
 {
@@ -241,7 +243,11 @@ bool log_callback(repeating_timer_t *rt)
   {
     printf(", %d", motor_states[e].count);
   }
-  printf("\n");
+  printf(", %d\n", acknowledge_flag);
+  if (acknowledge_flag)
+  {
+    acknowledge_flag = !acknowledge_flag;
+  }
   return true;
 }
 
@@ -251,6 +257,7 @@ bool command_callback(repeating_timer_t *rt)
   uint16_t end = read_line(serial_buffer);
   if (end > 1)
   {
+    acknowledge_flag = true;
     actuator_command message = interpret_buffer(serial_buffer, end);
     switch (message.command)
       {
@@ -271,10 +278,11 @@ bool command_callback(repeating_timer_t *rt)
         break;
       case ZERO_ENCODER:
         encoders[message.id]->zero();
+        motor_states[message.id].position_setpoint = 0;
         break;
       }
     end = 0;
-    printf("ACK\n");
+    //printf("ACK\n");
   }
   end = 0;
   return true;
