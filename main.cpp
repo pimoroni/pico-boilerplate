@@ -43,24 +43,25 @@ enum Commands
 // Motor and sensor structs
 struct motor_state
 {
-  int torque = 0;
-  int control = NO_CONTROL;
+  int     torque = 0;
+  int     control = NO_CONTROL;
   int32_t count = 0;
   int32_t delta = 0;
-  float speed_setpoint = 0.0f;
-  float position_setpoint = 0.0f;
-  float velocity_setpoint = 0.0f;
-  float drive_speed = 0.0f;
+  float   speed_setpoint = 0.0f;
+  float   position_setpoint = 0.0f;
+  float   velocity_setpoint = 0.0f;
+  float   drive_speed = 0.0f;
+  int     motor_status = 0;
 };
 
 struct sensors_state
 {
-  bool extension = 0;
-  bool twist = 0;
-  bool loop = 0;
-  bool cable0 = 0;
-  bool cable1 = 0;
-  bool cable2 = 0;
+  bool  extension = 0;
+  bool  twist = 0;
+  bool  loop = 0;
+  bool  cable0 = 0;
+  bool  cable1 = 0;
+  bool  cable2 = 0;
   float force = 0.0f;
 } sensors;
 
@@ -150,6 +151,8 @@ const int BUFFER_LENGTH = 512;
 
 uint8_t serial_buffer[BUFFER_LENGTH];
 
+const int SETPOINT_THRESHOLD = 10;
+
 bool acknowledge_flag = false;
 
 int main()
@@ -202,6 +205,21 @@ bool update_callback(repeating_timer_t *rt)
 
   for (auto e = 0u; e < NUM_MOTORS; e++)
   {
+    if ((motor_states[e].delta == 0))
+    {
+      if (((motor_states[e].count <= (motor_states[e].position_setpoint - SETPOINT_THRESHOLD))||(motor_states[e].count >= (motor_states[e].position_setpoint + SETPOINT_THRESHOLD)))&&(motor_states[e].control!=NO_CONTROL))
+      {
+        motor_states[e].motor_status = 2;
+      }
+      else
+      {
+        motor_states[e].motor_status = 0;
+      } 
+    }
+    else
+    {
+      motor_states[e].motor_status = 1;
+    }
     if (motor_states[e].torque)
     {
       if (!motors[e]->is_enabled())
