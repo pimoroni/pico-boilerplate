@@ -45,7 +45,8 @@ target_link_libraries(${NAME}
     pwm_cluster
     pwm
     motor_cluster
-    motor# <-- List libraries here!
+    motor
+    extension# <-- List libraries here!
 )
 
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
