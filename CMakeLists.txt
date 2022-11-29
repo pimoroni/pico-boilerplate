@@ -64,3 +64,4 @@ install(FILES
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 set(CPACK_GENERATOR "ZIP" "TGZ")
 include(CPack)
+add_subdirectory(extension)
