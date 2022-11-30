@@ -2,6 +2,8 @@
 #include "pico/stdlib.h"
 
 #include "extension.hpp"
+#include "loop.hpp"
+
 #include "motor2040.hpp"
 #include "button.hpp"
 #include "pid.hpp"
