@@ -38,7 +38,8 @@ constexpr float GEAR_RATIO = 98.0f;
 constexpr float COUNTS_PER_REV = MMME_CPR * GEAR_RATIO;
 
 // The direction to spin the motor in. NORMAL_DIR (0), REVERSED_DIR (1)
-const Direction DIRECTION = NORMAL_DIR;
+const Direction DIRECTION_MOTOR = NORMAL_DIR;
+const Direction DIRECTION_ENCODER = REVERSED_DIR;
 
 // The scaling to apply to the motor's speed to match its real-world speed
 constexpr float SPEED_SCALE = 5.4f;
@@ -61,10 +62,10 @@ constexpr float VEL_KI = 0.0f;  // Velocity integral (I) gain
 constexpr float VEL_KD = 0.4f;  // Velocity derivative (D) gain
 
 // Create a motor and set its direction and speed scale
-Motor m = Motor(MOTOR_PINS, DIRECTION, SPEED_SCALE);
+Motor m = Motor(MOTOR_PINS, DIRECTION_MOTOR, SPEED_SCALE);
 
 // Create an encoder and set its direction and counts per rev, using PIO 0 and State Machine 0
-Encoder enc = Encoder(pio0, 0, ENCODER_PINS, PIN_UNUSED, DIRECTION, COUNTS_PER_REV, true);
+Encoder enc = Encoder(pio0, 0, ENCODER_PINS, PIN_UNUSED, DIRECTION_ENCODER, COUNTS_PER_REV, true);
 
 // Create the user button
 Button user_sw(motor2040::USER_SW);
@@ -139,8 +140,11 @@ bool update_callback(repeating_timer_t *rt)
 
 bool log_callback(repeating_timer_t *rt)
 {
-  int32_t c = ext.cap_count();
-  printf("count: %d\n", c);
+  int32_t p = ext.get_position();
+  int s = ext.get_status();
+  int c = ext.get_control();
+  int32_t d = ext.get_delta();
+  printf("status: %d \tcontrol: %d\tpos: %d\tdelta:%d\n", s,c,p,d);
   return 1;
 }
 
@@ -150,6 +154,7 @@ bool command_callback(repeating_timer_t *rt)
   if (end > 1)
   {
     actuator_command message = interpret_buffer(serial_buffer, end);
+    printf("ID: %d\tCOMMAND: %d\tVALUE: %f\n", message.id, message.command, message.value);
     ext.execute_command(message.command, message.value);
   }
   return 1;

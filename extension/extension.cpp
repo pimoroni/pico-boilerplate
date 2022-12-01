@@ -27,30 +27,34 @@ extension::~extension()
 void extension::update()
 {
     _cap = _enc->capture();
-    bool es_raw = _endstop->raw();
-    bool es_read = _endstop->read();
 
     _homing();
 
-    switch (_control_approach)
+    _update_status();
+
+    if (_current_status != DISABLED)
     {
-    case SPEED:
-        break;
-    case POSITION:
-        _speed = _pos_pid->calculate(_cap.count());
-        _mot->speed(_speed);
-        break;
-    case VELOCITY:
-        float accel = _vel_pid->calculate(_cap.revolutions_per_second());
-        _speed =+ accel;
-        _mot->speed(_speed);
-        break;
+      switch (_control_approach)
+      {
+      case SPEED:
+          break;
+      case POSITION:
+          _speed = _pos_pid->calculate(_cap.count());
+          _mot->speed(_speed);
+          break;
+      case VELOCITY:
+          float accel = _vel_pid->calculate(_cap.revolutions_per_second());
+          _speed =+ accel;
+          _mot->speed(_speed);
+          break;
+      }
     }
 }
 
 void extension::execute_command(int com, float value)
 {
   int val = (int)value;
+
   switch (com)
   {
   case ENABLE:
@@ -58,12 +62,12 @@ void extension::execute_command(int com, float value)
     {
       _mot->enable();
     }else{
+      _mot->stop();
       _mot->disable();
-      _current_state = DISABLED;
+      _homing_flag = 0;
     }
     break;
   case CONTROL:
-    
     if (SPEED <= val && val <= VELOCITY)
       {
         _control_approach = val;
@@ -71,6 +75,7 @@ void extension::execute_command(int com, float value)
     break;
   case SET_SPEED:
     _mot->speed(value);
+    _speed = value;
     break;
   case SET_POSITION:
     _pos_pid->setpoint = value;
@@ -79,7 +84,7 @@ void extension::execute_command(int com, float value)
     _vel_pid->setpoint = value;
     break;
   case HOME:
-    if (value > 0) 
+    if (value > 0)
     {
       value *= -1;
     }
@@ -94,16 +99,75 @@ void extension::execute_command(int com, float value)
 
 void extension::_homing()
 {
-  if (_homing_flag && !_endstop->raw())
+  if (_homing_flag == 1)
   {
-    _control_approach = SPEED;
-    _mot->speed(0);
-    _enc->zero();
-    _homing_flag = 0;
+    if (!_endstop->raw())
+    {
+      _control_approach = POSITION;
+      _enc->zero();
+      _pos_pid->setpoint = 500;
+      _homing_flag++;
+    }
+  }
+  if (_homing_flag == 2)
+  {
+    if (_cap.delta() == 0)
+    {
+      _enc->zero();
+      _homing_flag = 0;
+    }
   }
 }
 
-int32_t extension::cap_count()
+void extension::_update_status()
+{
+  bool _mot_is_moving = -0.5 <= _speed && _speed >= 0.5;
+  bool _enc_is_moving = -1 <= _cap.delta() && _cap.delta() >= 1;
+
+  if (!_mot->is_enabled())
+  {
+    _current_status = DISABLED;
+  }
+  else if (_homing_flag) 
+  {
+    _current_status = HOMING;
+  } 
+  else if (!_endstop->raw())
+  {
+    _control_approach = POSITION;
+    _pos_pid->setpoint = _cap.count() + 5100;
+    _current_status = LIMIT;
+  }
+  else if (_mot_is_moving && _enc_is_moving)
+  {
+    _current_status = MOVING;
+  }
+  else if (!_mot_is_moving && !_enc_is_moving)
+  {
+    _current_status = IDLE;
+  }
+  else if (_mot_is_moving && !_enc_is_moving)
+  {
+    _current_status = STUCK;
+  }
+}
+
+int32_t extension::get_position()
 {
     return extension::_cap.count();
+}
+
+int32_t extension::get_delta()
+{
+  return _cap.delta();
+}
+
+int extension::get_status()
+{
+  return _current_status;
+}
+
+int extension::get_control()
+{
+  return _control_approach;
 }

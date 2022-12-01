@@ -47,7 +47,10 @@ public:
 
   void execute_command(int com, float value);
 
-  int32_t cap_count();
+  int32_t get_position();
+  int32_t get_delta();
+  int get_status();
+  int get_control();
   
   ~extension();
 
@@ -59,14 +62,15 @@ private:
   pimoroni::PID*    _pos_pid;
   pimoroni::PID*    _vel_pid;
 
-  int _current_state = DISABLED;
+  int _current_status = DISABLED;
   int _control_approach = SPEED;
-  bool _homing_flag = 0;
+  int _homing_flag = 0;
 
   encoder::Encoder::Capture _cap;
 
   float _speed = 0.0f;
 
   void _homing();
+  void _update_status();
 };
 
