@@ -41,13 +41,13 @@ twist::~twist()
 
 void twist::update()
 {
-    _cap_right = _enc_right->capture();
-    _cap_left = _enc_left->capture();
-    bool es_raw = _endstop->raw();
-    bool es_read = _endstop->read();
+  _cap_right = _enc_right->capture();
+  _cap_left = _enc_left->capture();
 
-    _homing();
+  _homing();
 
+  if (_current_status != DISABLED)
+  {
     switch (_control_approach)
     {
     case SPEED:
@@ -67,6 +67,7 @@ void twist::update()
         _mot_left->speed(_speed_left);
         break;
     }
+  }
 }
 
 void twist::execute_command(int com, float value)
@@ -80,13 +81,14 @@ void twist::execute_command(int com, float value)
       _mot_right->enable();
       _mot_left->enable();
     }else{
+      _mot_right->stop();
+      _mot_left->stop();
       _mot_right->disable();
       _mot_left->disable();
-      _current_state = DISABLED;
+      _current_status = DISABLED;
     }
     break;
   case CONTROL:
-    
     if (SPEED <= val && val <= VELOCITY)
       {
         _control_approach = val;
@@ -95,9 +97,13 @@ void twist::execute_command(int com, float value)
   case SET_SPEED:
     _mot_right->speed(value);
     _mot_left->speed(-value);
+    _speed_right = value;
+    _speed_left = -value;
     break;
   case SET_POSITION:
-    //_pos_pid->setpoint = value;
+    _target_size = value;
+    _pos_pid_right->setpoint = (_target_size + _target_offset) / 2;
+    _pos_pid_left->setpoint = (_target_size - _target_offset) / 2;
     break;
   case SET_VELOCITY:
     //_vel_pid->setpoint = value;
@@ -107,9 +113,15 @@ void twist::execute_command(int com, float value)
     {
       value *= -1;
     }
-    //_vel_pid->setpoint = value;
-    //_control_approach = VELOCITY;
-    //_homing_flag = true;
+    _vel_pid_right->setpoint = value;
+    _vel_pid_left->setpoint = value;
+    _control_approach = VELOCITY;
+    _homing_flag = true;
+    break;
+  case SET_OFFSET:
+    _target_offset = value;
+    _pos_pid_right->setpoint = (_target_size + _target_offset) / 2;
+    _pos_pid_left->setpoint = (_target_size - _target_offset) / 2;
     break;
   default:
     break;
@@ -118,10 +130,127 @@ void twist::execute_command(int com, float value)
 
 void twist::_homing()
 {
-  
+  switch (_homing_flag)
+  {
+    case 1:
+      if (!_runout_right->raw())
+      {
+        _vel_pid_right->setpoint = 0;
+        _cable_end_right = _cap_right.count();
+        _homing_flag++;
+      }
+      else if (!_runout_left->raw())
+      {
+        _vel_pid_left->setpoint = 0;
+        _cable_end_left = _cap_left.count();
+        _homing_flag += 2;
+      }
+      break;
+    case 2:
+      if (!_runout_left->raw())
+      {
+        _vel_pid_right->setpoint = -_vel_pid_left->setpoint;
+        _vel_pid_left->setpoint = -_vel_pid_left->setpoint;
+        _cable_end_left = _cap_left.count();
+        _homing_flag += 2;
+      }
+      break;
+    case 3:
+      if (!_runout_right->raw())
+      {
+        _vel_pid_right->setpoint = -_vel_pid_right->setpoint;
+        _vel_pid_left->setpoint = -_vel_pid_right->setpoint;
+        _cable_end_right = _cap_right.count();
+        _homing_flag++;
+      }
+      break;
+    case 4:
+      if (!_endstop->raw())
+      {
+        _control_approach = POSITION;
+        _target_offset = 0;
+        _target_size = _cap_right.count() + _cap_left.count() + 500;
+        _homing_flag++;
+      }
+      break;
+    case 5:
+      if (_cap_right.delta() == 0 && _cap_left.delta() == 0)
+      {
+        _cable_length = _cable_end_right - _cap_right.count() + _cable_end_left - _cap_left.count();
+        _enc_right->zero();
+        _enc_left->zero();
+        _target_size = 0;
+        _homing_flag = 0;
+      }
+      break;
+    default:
+      break;
+  } 
 }
 
-int32_t twist::cap_count()
+void twist::_update_status()
 {
-    return twist::_cap_right.count();
+  bool _mot_right_is_moving = -0.5 <= _speed_right && _speed_right >= 0.5;
+  bool _enc_right_is_moving = -1 <= _cap_right.delta() && _cap_right.delta() >= 1;
+  bool _mot_left_is_moving = -0.5 <= _speed_left && _speed_left >= 0.5;
+  bool _enc_left_is_moving = -1 <= _cap_left.delta() && _cap_left.delta() >= 1;
+
+  if (!_mot_right->is_enabled())
+  {
+    _current_status = DISABLED;
+  }
+  else if (_homing_flag) 
+  {
+    _current_status = HOMING;
+  } 
+  else if (!_runout_right->raw())
+  {
+    _control_approach = POSITION;
+    _pos_pid_right->setpoint = _cap_right.count() - 100;
+    _current_status = LIMIT;
+  }
+  else if (!_runout_left->raw())
+  {
+    _control_approach = POSITION;
+    _pos_pid_left->setpoint = _cap_left.count() - 100;
+    _current_status = LIMIT;
+  }
+  else if (_mot_right_is_moving && _enc_right_is_moving && _mot_left_is_moving && _enc_left_is_moving)
+  {
+    _current_status = MOVING;
+  }
+  else if (!_mot_right_is_moving && !_enc_right_is_moving && !_mot_left_is_moving && !_enc_left_is_moving)
+  {
+    _current_status = IDLE;
+  }
+  else if ((_mot_right_is_moving && !_enc_right_is_moving) || (_mot_left_is_moving && !_enc_left_is_moving))
+  { 
+    _current_status = STUCK;
+  }
 }
+
+int32_t twist::get_size()
+{
+    return _cap_right.count() + _cap_left.count();
+}
+
+int32_t twist::get_offset()
+{
+    return _cap_right.count() - _cap_left.count();
+}
+
+int32_t twist::get_velocity()
+{
+  return _cap_right.delta();
+}
+
+int twist::get_status()
+{
+  return _current_status;
+}
+
+int twist::get_control()
+{
+  return _control_approach;
+}
+

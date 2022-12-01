@@ -101,23 +101,22 @@ void extension::_homing()
 {
   switch (_homing_flag)
   {
-  case 1:
-    if (!_endstop->raw())
-    {
-      _control_approach = POSITION;
-      _enc->zero();
-      _pos_pid->setpoint = 500;
-      _homing_flag++;
-    }
-    break;
-  case 2:
-    if (_cap.delta() == 0)
-    {
-      _enc->zero();
-      _homing_flag = 0;
-    }
-  default:
-    break;
+    case 1:
+      if (!_endstop->raw())
+      {
+        _control_approach = POSITION;
+        _pos_pid->setpoint = _cap.count() + 500;
+        _homing_flag++;
+      }
+      break;
+    case 2:
+      if (_cap.delta() == 0)
+      {
+        _enc->zero();
+        _homing_flag = 0;
+      }
+    default:
+      break;
   }
 }
 
