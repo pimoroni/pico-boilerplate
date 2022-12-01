@@ -21,10 +21,20 @@ struct actuator_command
 using namespace motor;
 using namespace encoder;
 
-const pin_pair MOTOR_PINS = motor2040::MOTOR_B;
+const pin_pair EX_MOTOR_PINS = motor2040::MOTOR_A;
+const pin_pair LP_MOTOR_PINS = motor2040::MOTOR_B;
 
 // The pins of the encoder attached to the profiled motor
-const pin_pair ENCODER_PINS = motor2040::ENCODER_B;
+const pin_pair EX_ENCODER_PINS = motor2040::ENCODER_A;
+const pin_pair LP_ENCODER_PINS = motor2040::ENCODER_B;
+
+const int EX_ENDSTOP_PIN = 19;
+const int TW_ENDSTOP_PIN = 26;
+const int lp_RUNOUT_PIN = 16;
+const int TL_RUNOUT_PIN = 17;
+const int TR_RUNOUT_PIN = 28;
+
+const int FORCE_PIN = motor2040::ADC1;
 
 // The gear ratio of the motor
 constexpr float GEAR_RATIO = 98.0f;
@@ -55,6 +65,10 @@ constexpr float POS_KD = 0.002f;  // Position derivative (D) gain
 constexpr float VEL_KP = 30.0f; // Velocity proportional (P) gain
 constexpr float VEL_KI = 0.0f;  // Velocity integral (I) gain
 constexpr float VEL_KD = 0.4f;  // Velocity derivative (D) gain
+
+constexpr float FRC_KP = 10.0f; // Velocity proportional (P) gain
+constexpr float FRC_KI = 0.0f;  // Velocity integral (I) gain
+constexpr float FRC_KD = 0.4f;  // Velocity derivative (D) gain
 
 const int BUFFER_LENGTH = 512;
 

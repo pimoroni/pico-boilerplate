@@ -99,8 +99,9 @@ void extension::execute_command(int com, float value)
 
 void extension::_homing()
 {
-  if (_homing_flag == 1)
+  switch (_homing_flag)
   {
+  case 1:
     if (!_endstop->raw())
     {
       _control_approach = POSITION;
@@ -108,14 +109,15 @@ void extension::_homing()
       _pos_pid->setpoint = 500;
       _homing_flag++;
     }
-  }
-  if (_homing_flag == 2)
-  {
+    break;
+  case 2:
     if (_cap.delta() == 0)
     {
       _enc->zero();
       _homing_flag = 0;
     }
+  default:
+    break;
   }
 }
 
@@ -135,7 +137,7 @@ void extension::_update_status()
   else if (!_endstop->raw())
   {
     _control_approach = POSITION;
-    _pos_pid->setpoint = _cap.count() + 5100;
+    _pos_pid->setpoint = _cap.count() + 100;
     _current_status = LIMIT;
   }
   else if (_mot_is_moving && _enc_is_moving)
@@ -157,7 +159,7 @@ int32_t extension::get_position()
     return extension::_cap.count();
 }
 
-int32_t extension::get_delta()
+int32_t extension::get_velocity()
 {
   return _cap.delta();
 }

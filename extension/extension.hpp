@@ -48,7 +48,7 @@ public:
   void execute_command(int com, float value);
 
   int32_t get_position();
-  int32_t get_delta();
+  int32_t get_velocity();
   int get_status();
   int get_control();
   
