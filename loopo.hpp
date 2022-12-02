@@ -4,6 +4,7 @@
 #include "pico/stdlib.h"
 
 #include "extension.hpp"
+#include "twist.hpp"
 #include "loop.hpp"
 
 #include "motor2040.hpp"
@@ -22,15 +23,19 @@ using namespace motor;
 using namespace encoder;
 
 const pin_pair EX_MOTOR_PINS = motor2040::MOTOR_A;
-const pin_pair LP_MOTOR_PINS = motor2040::MOTOR_B;
+const pin_pair TR_MOTOR_PINS = motor2040::MOTOR_B;
+const pin_pair TL_MOTOR_PINS = motor2040::MOTOR_C;
+const pin_pair LP_MOTOR_PINS = motor2040::MOTOR_D;
 
 // The pins of the encoder attached to the profiled motor
 const pin_pair EX_ENCODER_PINS = motor2040::ENCODER_A;
-const pin_pair LP_ENCODER_PINS = motor2040::ENCODER_B;
+const pin_pair TR_ENCODER_PINS = motor2040::ENCODER_B;
+const pin_pair TL_ENCODER_PINS = motor2040::ENCODER_C;
+const pin_pair LP_ENCODER_PINS = motor2040::ENCODER_D;
 
 const int EX_ENDSTOP_PIN = 19;
 const int TW_ENDSTOP_PIN = 26;
-const int lp_RUNOUT_PIN = 16;
+const int LP_RUNOUT_PIN = 16;
 const int TL_RUNOUT_PIN = 17;
 const int TR_RUNOUT_PIN = 28;
 

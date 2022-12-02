@@ -46,6 +46,8 @@ void twist::update()
 
   _homing();
 
+  _update_status();
+
   if (_current_status != DISABLED)
   {
     switch (_control_approach)
@@ -85,7 +87,7 @@ void twist::execute_command(int com, float value)
       _mot_left->stop();
       _mot_right->disable();
       _mot_left->disable();
-      _current_status = DISABLED;
+      _homing_flag = 0;
     }
     break;
   case CONTROL:
