@@ -22,8 +22,10 @@ add_executable(${NAME}
 # Include required libraries
 # This assumes `pimoroni-pico` is stored alongside your project
 include(common/pimoroni_i2c)
+include(common/pimoroni_bus)
+include(libraries/bitmap_fonts/bitmap_fonts)
+include(libraries/hershey_fonts/hershey_fonts)
 include(libraries/pico_explorer/pico_explorer)
-# include(libraries/pico_display/pico_display)
 
 # Don't forget to link the libraries you need!
 target_link_libraries(${NAME}

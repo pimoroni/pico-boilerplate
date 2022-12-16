@@ -1,18 +1,19 @@
 #include "pico_explorer.hpp"
+#include "drivers/st7789/st7789.hpp"
+#include "libraries/pico_graphics/pico_graphics.hpp"
 
 using namespace pimoroni;
 
-uint16_t buffer[PicoExplorer::WIDTH * PicoExplorer::HEIGHT];
-PicoExplorer pico_explorer(buffer);
+ST7789 st7789(PicoExplorer::WIDTH, PicoExplorer::HEIGHT, ROTATE_0, false, get_spi_pins(BG_SPI_FRONT));
+PicoGraphics_PenRGB332 graphics(st7789.width, st7789.height, nullptr);
 
 int main() {
-    pico_explorer.init();
-
-    pico_explorer.set_pen(255, 0, 0);
+    graphics.set_pen(255, 0, 0);
 
     while(true) {
-        pico_explorer.pixel(Point(0, 0));
+        graphics.pixel(Point(0, 0));
+
         // now we've done our drawing let's update the screen
-        pico_explorer.update();
+        st7789.update(&graphics);
     }
 }
