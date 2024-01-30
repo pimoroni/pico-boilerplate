@@ -1,6 +1,11 @@
 # This file can be dropped into a project to help locate the Pimoroni Pico libraries
 # It will also set up the required include and module search paths.
 
+if (DEFINED ENV{PIMORONI_PICO_PATH} AND (NOT PIMORONI_PICO_PATH))
+    set(PIMORONI_PICO_PATH $ENV{PIMORONI_PICO_PATH})
+    message("Using PIMORONI_PICO_PATH from environment ('${PIMORONI_PICO_PATH}')")
+endif ()
+
 if (NOT PIMORONI_PICO_PATH)
     set(PIMORONI_PICO_PATH "../../pimoroni-pico/")
 endif()
