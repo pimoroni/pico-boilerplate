@@ -31,20 +31,20 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         path: project
 
     # Checkout the Pimoroni Pico Libraries
     - name: Checkout Pimoroni Pico Libraries
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         repository: pimoroni/pimoroni-pico
         path: pimoroni-pico
 
     # Checkout the Pico SDK
     - name: Checkout Pico SDK
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         repository: raspberrypi/pico-sdk
         path: pico-sdk
