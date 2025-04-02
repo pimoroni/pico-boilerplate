@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.13...3.27)
 
 # Change your executable name to something creative!
 set(NAME pico-boilerplate) # <-- Name your project/executable here!
