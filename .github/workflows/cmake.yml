@@ -48,6 +48,7 @@ jobs:
       with:
         repository: raspberrypi/pico-sdk
         path: pico-sdk
+        ref: '2.1.1'
         submodules: true
 
     # Linux deps
