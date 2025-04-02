@@ -31,20 +31,20 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         path: project
 
     # Checkout the Pimoroni Pico Libraries
     - name: Checkout Pimoroni Pico Libraries
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: pimoroni/pimoroni-pico
         path: pimoroni-pico
 
     # Checkout the Pico SDK
     - name: Checkout Pico SDK
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: raspberrypi/pico-sdk
         path: pico-sdk
@@ -80,12 +80,12 @@ jobs:
 
     - name: Upload .zip
       if: github.event_name == 'release'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: ${{runner.workspace}}/build/${{env.RELEASE_FILE}}.zip
 
     - name: Upload .tar.gz
       if: github.event_name == 'release'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: ${{runner.workspace}}/build/${{env.RELEASE_FILE}}.tar.gz
