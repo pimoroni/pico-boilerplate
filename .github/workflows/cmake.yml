@@ -57,6 +57,9 @@ jobs:
       run: |
         sudo apt update && sudo apt install ${{matrix.apt-packages}}
 
+    - name: CMake Version
+      run: cmake --version
+
     - name: Create Build Environment
       run: cmake -E make_directory ${{runner.workspace}}/build
 
