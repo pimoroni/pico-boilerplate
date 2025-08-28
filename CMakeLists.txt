@@ -33,6 +33,10 @@ target_link_libraries(${NAME}
     pico_explorer # <-- List libraries here!
 )
 
+if (PICO_CYW43_SUPPORTED)
+    target_link_libraries(${NAME} pico_cyw43_arch_none)
+endif()
+
 # create map/bin/hex file etc.
 pico_add_extra_outputs(${NAME})
 
